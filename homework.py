@@ -1,11 +1,18 @@
-...
+import os
+import time
+from typing import Optional
+
+import requests
+from requests.models import Response
+import telegram
+from dotenv import load_dotenv
 
 load_dotenv()
 
 
-PRACTICUM_TOKEN = ...
-TELEGRAM_TOKEN = ...
-TELEGRAM_CHAT_ID = ...
+PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 RETRY_TIME = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
@@ -19,20 +26,23 @@ HOMEWORK_STATUSES = {
 }
 
 
-def send_message(bot, message):
-    ...
+def send_message(bot: telegram.Bot, message: str) -> None:
+    bot.send_message(
+        chat_id=TELEGRAM_CHAT_ID,
+        text=message
+    )
 
 
-def get_api_answer(current_timestamp):
+def get_api_answer(current_timestamp: Optional[int] = None) -> Response:
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
 
-    ...
+    return requests.get(ENDPOINT, headers=HEADERS, params=params).json()
 
 
-def check_response(response):
+def check_response(response: Response):
 
-    ...
+    print(response)
 
 
 def parse_status(homework):
@@ -49,24 +59,30 @@ def parse_status(homework):
 
 
 def check_tokens():
-    ...
+    envlist = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
+    result = [False] * len(envlist)
+
+    for index, env in enumerate(envlist):
+        result[index] = True if env is not None else False
+
+    return all(result)
 
 
-def main():
+def main() -> None:
     """Основная логика работы бота."""
+    if not check_tokens():
+        raise SystemExit('You need to set all Environment variables')
 
-    ...
-
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    bot = telegram.Bot(token=str(TELEGRAM_TOKEN))
     current_timestamp = int(time.time())
 
     ...
 
     while True:
         try:
-            response = ...
+            response = get_api_answer()
 
-            ...
+            check_response(response)
 
             current_timestamp = ...
             time.sleep(RETRY_TIME)
