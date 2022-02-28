@@ -9,13 +9,7 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
-from exceptions import (
-    APIAccessError,
-    APIResponseError,
-    HomeworkUnknownStatus,
-    ResponseLackHomeworks,
-    ResponseHomeworksNotList
-)
+from exceptions import APIResponseError
 
 load_dotenv()
 logging.basicConfig(
@@ -43,6 +37,11 @@ HOMEWORK_STATUSES = {
 
 
 def send_message(bot: telegram.Bot, message: str) -> None:
+    """Отправка Telegram сообщения.
+
+    Пробуем отправить сообщение ботом, в случае исключения - логируем его,
+    если получится - записываем в лог.INFO строку сообщения
+    """
     try:
         bot.send_message(
             chat_id=TELEGRAM_CHAT_ID,
@@ -55,6 +54,13 @@ def send_message(bot: telegram.Bot, message: str) -> None:
 
 
 def get_api_answer(current_timestamp: Optional[int] = None) -> dict:
+    """Получение ответа APIи преобразование в тип данных Python.
+
+    На входе получаем epoch или устанавливаем его в сейчас.
+    Пробеум получить ответ от эндпоинта.
+    В случае недоступности - кидаем исключение
+    По заданию если ответ эндпоинта не 200 - тоже кидаем исключение
+    """
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
 
@@ -66,7 +72,7 @@ def get_api_answer(current_timestamp: Optional[int] = None) -> dict:
             timeout=ENDPOINT_TIMEOUT
         )
     except Exception as error:
-        raise APIAccessError(f'Эндпоинт не доступен: {error}')
+        raise Exception(f'Эндпоинт не доступен: {error}')
     else:
         if response.status_code != HTTPStatus.OK:
             raise APIResponseError(
@@ -77,16 +83,17 @@ def get_api_answer(current_timestamp: Optional[int] = None) -> dict:
 
 
 def check_response(response: dict) -> list:
+    """Проверяем ответ на наличие необходимых ключей и типов данных."""
     if type(response) is not dict:
-        raise TypeError('В ответе API нет dict')
+        raise TypeError('Ответ API не словарь')
 
-    homeworks = response.get('homeworks')
-
-    if homeworks is None:
-        raise ResponseLackHomeworks('В ответе API нет ключа homeworks')
+    try:
+        homeworks = response['homeworks']
+    except KeyError as error:
+        raise KeyError(f'В ответе API нет ключа {error}')
 
     if type(homeworks) is not list:
-        raise ResponseHomeworksNotList(
+        raise TypeError(
             'В ответе API ключ homeworks - не список!'
         )
 
@@ -94,23 +101,27 @@ def check_response(response: dict) -> list:
 
 
 def parse_status(homework: dict) -> str:
+    """Проверка наличия необходимых для уведомления пользователя данных."""
     try:
-        homework_name = homework['homework_nam']
+        homework_name = homework['homework_name']
         homework_status = homework['status']
     except KeyError as error:
         raise KeyError(f'В ответе API нет ключа {error}')
 
-    if homework_status not in HOMEWORK_STATUSES.keys():
-        raise HomeworkUnknownStatus(
-            f'Неизвестный статус работы {homework_status}'
-        )
-
-    verdict = HOMEWORK_STATUSES.get(str(homework_status))
+    try:
+        verdict = HOMEWORK_STATUSES[homework_status]
+    except KeyError as error:
+        raise KeyError(f'Неизвестный статус работы {error}')
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens() -> bool:
+    """Проверяем все ли переменные окружения установлены.
+
+    Проходим по списку необходимых переменных окружения, если какая-то одна не
+    установлена - возвращаем False и записываем в лог.CRITICAL
+    """
     envlist = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
     result = [False] * len(envlist)
 
@@ -133,7 +144,6 @@ def main() -> None:
 
     bot = telegram.Bot(token=str(TELEGRAM_TOKEN))
     current_timestamp = int(time.time())
-    current_timestamp = 1
     last_exception_msg = ""
 
     while True:
