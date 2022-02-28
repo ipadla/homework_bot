@@ -158,7 +158,9 @@ def main() -> None:
                 for homework in homeworks:
                     send_message(bot=bot, message=parse_status(homework))
 
-            current_timestamp = response.get('current_date', int(time.time()))
+            current_timestamp = response.get(
+                'current_date', int(time.time()) - RETRY_TIME
+            )
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
