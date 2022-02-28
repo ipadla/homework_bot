@@ -6,5 +6,13 @@ class APIResponseError(Exception):
     pass
 
 
-class CheckResponseError(Exception):
+class HomeworkUnknownStatus(Exception):
+    pass
+
+
+class ResponseLackHomeworks(Exception):
+    pass
+
+
+class ResponseHomeworksNotList(Exception):
     pass

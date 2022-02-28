@@ -9,11 +9,17 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
-from exceptions import APIAccessError, APIResponseError, CheckResponseError
+from exceptions import (
+    APIAccessError,
+    APIResponseError,
+    HomeworkUnknownStatus,
+    ResponseLackHomeworks,
+    ResponseHomeworksNotList
+)
 
 load_dotenv()
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     handlers=[logging.StreamHandler(stream=sys.stdout)],
     format='%(asctime)s %(levelname)s %(message)s'
 )
@@ -29,7 +35,6 @@ ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 ENDPOINT_TIMEOUT = 10
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-
 HOMEWORK_STATUSES = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
@@ -44,9 +49,9 @@ def send_message(bot: telegram.Bot, message: str) -> None:
             text=message
         )
     except Exception as error:
-        logger.error(f"Не удалось отправить сообщение в Telegram: {error}")
+        logger.error(f'Не удалось отправить сообщение в Telegram: {error}')
     else:
-        logger.info(f"Бот отправил сообщение: {message}")
+        logger.info(f'Бот отправил сообщение: {message}')
 
 
 def get_api_answer(current_timestamp: Optional[int] = None) -> dict:
@@ -61,11 +66,11 @@ def get_api_answer(current_timestamp: Optional[int] = None) -> dict:
             timeout=ENDPOINT_TIMEOUT
         )
     except Exception as error:
-        raise APIAccessError(f"Эндпоинт не доступен: {error}")
+        raise APIAccessError(f'Эндпоинт не доступен: {error}')
     else:
         if response.status_code != HTTPStatus.OK:
             raise APIResponseError(
-                f"Ошибка доступа к эндпоинту, HTTP: {response.status_code}"
+                f'Ошибка доступа к эндпоинту, HTTP: {response.status_code}'
             )
         else:
             return response.json()
@@ -78,23 +83,29 @@ def check_response(response: dict) -> list:
     homeworks = response.get('homeworks')
 
     if homeworks is None:
-        raise CheckResponseError('В ответе API нет ключа homeworks')
+        raise ResponseLackHomeworks('В ответе API нет ключа homeworks')
 
     if type(homeworks) is not list:
-        raise CheckResponseError('В ответе API ключ homeworks - не список!')
+        raise ResponseHomeworksNotList(
+            'В ответе API ключ homeworks - не список!'
+        )
 
     return homeworks
 
 
-def parse_status(homework: list) -> str:
-    homework_name = ...
-    homework_status = ...
+def parse_status(homework: dict) -> str:
+    try:
+        homework_name = homework['homework_nam']
+        homework_status = homework['status']
+    except KeyError as error:
+        raise KeyError(f'В ответе API нет ключа {error}')
 
-    ...
+    if homework_status not in HOMEWORK_STATUSES.keys():
+        raise HomeworkUnknownStatus(
+            f'Неизвестный статус работы {homework_status}'
+        )
 
-    verdict = ...
-
-    ...
+    verdict = HOMEWORK_STATUSES.get(str(homework_status))
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -109,7 +120,7 @@ def check_tokens() -> bool:
         else:
             result[index] = False
             logger.critical(
-                f"Отсутствует обязательная переменная окружения: {env}"
+                f'Отсутствует обязательная переменная окружения: {env}'
             )
 
     return all(result)
@@ -118,14 +129,12 @@ def check_tokens() -> bool:
 def main() -> None:
     """Основная логика работы бота."""
     if not check_tokens():
-        raise SystemExit('You need to set all Environment variables')
+        raise SystemExit('Нужно установить все переменные окружения')
 
     bot = telegram.Bot(token=str(TELEGRAM_TOKEN))
     current_timestamp = int(time.time())
-    # current_timestamp = 1
-    last_exception = ""
-
-    ...
+    current_timestamp = 1
+    last_exception_msg = ""
 
     while True:
         try:
@@ -133,23 +142,19 @@ def main() -> None:
 
             homeworks = check_response(response)
 
-            current_timestamp = response.get('current_date')
-        except Exception as error:
-            # print(str(error))
-            error_name = error.__class__.__name__
-            # message = f'Сбой в работе программы: {error}'
+            if len(homeworks) == 0:
+                logger.debug('Отсутствуют новые статусы в ответе API')
+            else:
+                for homework in homeworks:
+                    send_message(bot=bot, message=parse_status(homework))
 
-            if error_name in [
-                    'APIAccessError',
-                    'APIResponseError',
-                    'CheckResponseError',
-                    'TypeError']:
-                logger.error(str(error))
-                if last_exception != error_name:
-                    send_message(bot=bot, message=str(error))
-                    last_exception = error_name
-        else:
-            ...
+            current_timestamp = response.get('current_date', int(time.time()))
+        except Exception as error:
+            message = f'Сбой в работе программы: {error}'
+            logger.error(message)
+            if last_exception_msg != message:
+                send_message(bot=bot, message=message)
+                last_exception_msg = message
         finally:
             time.sleep(RETRY_TIME)
 
