@@ -9,8 +9,8 @@ import telegram
 
 from exceptions import APIResponseError
 from settings import (ENDPOINT, ENDPOINT_TIMEOUT, ENVLIST, HEADERS,
-                      HOMEWORK_STATUSES, RETRY_TIME, TELEGRAM_CHAT_ID,
-                      TELEGRAM_TOKEN, YANDEX_TOKEN)
+                      HOMEWORK_STATUSES, PRACTICUM_TOKEN, RETRY_TIME,
+                      TELEGRAM_CHAT_ID, TELEGRAM_TOKEN)
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -19,7 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-PRACTICUM_TOKEN = YANDEX_TOKEN
+PRACTICUM_TOKEN
 
 
 def send_message(bot: telegram.Bot, message: str) -> None:
