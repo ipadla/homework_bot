@@ -1,5 +1,4 @@
 import logging
-import os
 import sys
 import time
 from http import HTTPStatus
@@ -7,11 +6,12 @@ from typing import Optional
 
 import requests
 import telegram
-from dotenv import load_dotenv
 
 from exceptions import APIResponseError
+from settings import (ENDPOINT, ENDPOINT_TIMEOUT, ENVLIST, HEADERS,
+                      HOMEWORK_STATUSES, RETRY_TIME, TELEGRAM_CHAT_ID,
+                      TELEGRAM_TOKEN, YANDEX_TOKEN)
 
-load_dotenv()
 logging.basicConfig(
     level=logging.DEBUG,
     handlers=[logging.StreamHandler(stream=sys.stdout)],
@@ -19,21 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-
-RETRY_TIME = 600
-ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
-ENDPOINT_TIMEOUT = 10
-HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-
-HOMEWORK_STATUSES = {
-    'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
-    'reviewing': 'Работа взята на проверку ревьюером.',
-    'rejected': 'Работа проверена: у ревьюера есть замечания.'
-}
+PRACTICUM_TOKEN = YANDEX_TOKEN
 
 
 def send_message(bot: telegram.Bot, message: str) -> None:
@@ -47,8 +33,8 @@ def send_message(bot: telegram.Bot, message: str) -> None:
             chat_id=TELEGRAM_CHAT_ID,
             text=message
         )
-    except Exception as error:
-        logger.error(f'Не удалось отправить сообщение в Telegram: {error}')
+    except telegram.error.TelegramError:
+        logger.error(f'Не удалось отправить сообщение в Telegram: {message}')
     else:
         logger.info(f'Бот отправил сообщение: {message}')
 
@@ -78,8 +64,14 @@ def get_api_answer(current_timestamp: Optional[int] = None) -> dict:
             raise APIResponseError(
                 f'Ошибка доступа к эндпоинту, HTTP: {response.status_code}'
             )
-        else:
-            return response.json()
+
+    try:
+        response.json()
+    except requests.exceptions.JSONDecodeError:
+        logger.error('Ошибка в формате json')
+        raise requests.exceptions.JSONDecodeError('Ошибка в формате json')
+    else:
+        return response.json()
 
 
 def check_response(response: dict) -> list:
@@ -122,19 +114,13 @@ def check_tokens() -> bool:
     Проходим по списку необходимых переменных окружения, если какая-то одна не
     установлена - возвращаем False и записываем в лог.CRITICAL
     """
-    envlist = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
-    result = [False] * len(envlist)
-
-    for index, env in enumerate(envlist):
-        if globals()[env] is not None:
-            result[index] = True
-        else:
-            result[index] = False
+    for env in ENVLIST:
+        if not globals()[env]:
             logger.critical(
                 f'Отсутствует обязательная переменная окружения: {env}'
             )
 
-    return all(result)
+    return all([bool(globals()[env]) for env in ENVLIST])
 
 
 def main() -> None:
