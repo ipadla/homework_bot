@@ -19,8 +19,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-PRACTICUM_TOKEN
-
 
 def send_message(bot: telegram.Bot, message: str) -> None:
     """Отправка Telegram сообщения.
@@ -66,12 +64,12 @@ def get_api_answer(current_timestamp: Optional[int] = None) -> dict:
             )
 
     try:
-        response.json()
+        result = response.json()
     except requests.exceptions.JSONDecodeError:
         logger.error('Ошибка в формате json')
         raise requests.exceptions.JSONDecodeError('Ошибка в формате json')
-    else:
-        return response.json()
+
+    return result
 
 
 def check_response(response: dict) -> list:
@@ -120,7 +118,7 @@ def check_tokens() -> bool:
                 f'Отсутствует обязательная переменная окружения: {env}'
             )
 
-    return all([bool(globals()[env]) for env in ENVLIST])
+    return all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
 
 
 def main() -> None:
