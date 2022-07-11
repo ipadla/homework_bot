@@ -13,6 +13,10 @@ Cоздать и активировать виртуальное окружен�
 python3 -m venv venv
 source venv/bin/activate
 ```
+Установить зависимости из файла requirements.txt:
+```
+pip install requirements.txt
+```
 Запустить бота
 ```
 python3 ./homework.py
